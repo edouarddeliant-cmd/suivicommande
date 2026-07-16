@@ -6,7 +6,7 @@ services:
       - APP_USER=${APP_USER:-admin}
       - APP_PASSWORD=${APP_PASSWORD:?definir APP_PASSWORD}
       - API_TOKEN=${API_TOKEN:?definir API_TOKEN}
-      - SERVICE_FQDN_APP_8000
+      - SERVICE_FQDN_APP_8000=suivicommande.e-labs.fr
     depends_on:
       db:
         condition: service_healthy
