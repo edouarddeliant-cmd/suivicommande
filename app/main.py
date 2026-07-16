@@ -296,6 +296,57 @@ async def api_patch(bon: str, request: Request, db: Session = Depends(get_db), _
     return logic.order_view(o)
 
 
+@app.post("/api/import")
+async def api_import(request: Request, db: Session = Depends(get_db), _=Depends(require_api)):
+    """Import en masse depuis le Google Sheet.
+
+    Corps JSON : {"reset": bool, "orders": [ {...} ], "machines": [ {...} ]}.
+    Les commandes sont upsert par bon_commande ; les machines sont rattachées
+    à leur commande via bon_commande. Seuls les champs stockés sont pris en compte.
+    """
+    payload = await request.json()
+    order_fields = {c.name for c in Order.__table__.columns} - {"id", "created_at"}
+    machine_fields = {c.name for c in Machine.__table__.columns} - {"id", "order_id"}
+
+    if payload.get("reset"):
+        for m in db.scalars(select(Machine)).all():
+            db.delete(m)
+        for o in db.scalars(select(Order)).all():
+            db.delete(o)
+        db.commit()
+
+    n_orders = 0
+    for od in payload.get("orders", []):
+        bon = (od.get("bon_commande") or "").strip()
+        if not bon:
+            continue
+        o = db.scalar(select(Order).where(Order.bon_commande == bon))
+        if not o:
+            o = Order(bon_commande=bon)
+            db.add(o)
+        for k, v in od.items():
+            if k in order_fields and k != "bon_commande":
+                setattr(o, k, v)
+        n_orders += 1
+    db.commit()
+
+    n_machines = 0
+    for md in payload.get("machines", []):
+        bon = (md.get("bon_commande") or "").strip()
+        o = db.scalar(select(Order).where(Order.bon_commande == bon)) if bon else None
+        if not o:
+            continue
+        m = Machine(order_id=o.id, bon_commande=bon)
+        for k, v in md.items():
+            if k in machine_fields:
+                setattr(m, k, v)
+        db.add(m)
+        n_machines += 1
+    db.commit()
+
+    return {"reset": bool(payload.get("reset")), "orders": n_orders, "machines": n_machines}
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
