@@ -79,6 +79,10 @@
       <div class="field"><label>Statut physique</label><input name="physical_status" value="{{ m.physical_status }}"></div>
       <div class="field"><label>Emplacement</label><input name="location" value="{{ m.location }}"></div>
     </div>
+    <div style="margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button type="button" class="btn" onclick="genSku(this.form)">⚙︎ Générer le SKU E-Labs → SKU scanné</button>
+      <span class="sku-info muted" style="font-size:12px"></span>
+    </div>
     <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
     <div class="grid2">
       <div class="field"><label>Problème (texte libre — laisser vide si RAS)</label><input name="probleme" value="{{ '' if (m.probleme|upper) in ['', 'RAS'] else m.probleme }}" placeholder="ex. écran rayé, mauvais modèle livré…"></div>
@@ -94,4 +98,61 @@
 <form method="post" action="/orders/{{ o.id }}/delete" onsubmit="return confirm('Supprimer cette commande et ses machines ?')" style="margin-top:18px">
   <button class="btn" style="color:var(--red)">Supprimer la commande</button>
 </form>
+
+<script>
+// Génération du SKU E-Labs : MODELE-ANNEE-SSD-RAM-PUCE-COULEUR-GRADE
+// déduit des champs de la machine, écrit dans "SKU scanné".
+function genSku(form){
+  const g = n => (form.querySelector('[name="'+n+'"]') || {}).value || '';
+  const model=g('model'), variant=g('variant'), capacity=g('capacity'),
+        colour=g('colour'), product=g('product_name'), grade=g('grade');
+  const hay=[model,variant,product].join(' ');
+  const low=hay.toLowerCase();
+  const missing=[];
+  // MODELE
+  let mdl='';
+  if(/mac\s*mini/.test(low)) mdl='MM';
+  else if(/mac\s*studio/.test(low)) mdl='MS';
+  else if(/macbook\s*air/.test(low)) mdl=/\b15/.test(hay)?'MBA15':'MBA13';
+  else if(/macbook\s*pro/.test(low)) mdl=/\b16/.test(hay)?'MBP16':(/\b14/.test(hay)?'MBP14':'MBP13');
+  if(!mdl){mdl='?';missing.push('modèle');}
+  // ANNEE
+  const ym=hay.match(/\b20(\d\d)\b/); let yr=ym?ym[1]:''; if(!yr){yr='??';missing.push('année');}
+  // SSD
+  let ssd=''; const cap=capacity.toLowerCase().replace(',','.');
+  const tb=cap.match(/([\d.]+)\s*t[bo]/), gb=cap.match(/(\d+)\s*g[bo]/);
+  if(tb) ssd={'1':'S10','1.5':'S15','2':'S20','4':'S40','8':'S80'}[String(parseFloat(tb[1]))]||'';
+  else if(gb) ssd={'128':'S12','256':'S25','512':'S51','1024':'S10'}[gb[1]]||'';
+  if(!ssd){ssd='S??';missing.push('SSD');}
+  // RAM
+  let ram=''; const rm=colour.match(/(\d+)\s*g[bo]/i)||variant.match(/(\d+)\s*g[bo]\s*(?:ram|unified|mémoire|memory)/i)||product.match(/(\d+)\s*g[bo]\s*(?:ram|unified|mémoire|memory)/i);
+  if(rm) ram='R'+rm[1]; if(!ram){ram='R??';missing.push('RAM');}
+  // PUCE
+  let chip=''; const am=hay.match(/m([1-4])\s*(pro|max|ultra)?/i);
+  if(am){
+    const gen=am[1], tier={pro:'P',max:'M',ultra:'U'}[(am[2]||'').toLowerCase()]||'';
+    const cpu=(hay.match(/(\d+)\s*[- ]?core\s*cpu/i)||hay.match(/(\d+)\s*cœurs?\s*cpu/i)||[])[1]||'';
+    const gpu=(hay.match(/(\d+)\s*[- ]?core\s*gpu/i)||hay.match(/(\d+)\s*cœurs?\s*gpu/i)||[])[1]||'';
+    if(gen&&cpu&&gpu) chip='M'+gen+tier+cpu+'C'+gpu+'G';
+  } else {
+    const im=hay.match(/i([3579])\b/i), gh=hay.match(/([\d.,]+)\s*g?hz/i);
+    if(im&&gh) chip='i'+im[1]+parseFloat(gh[1].replace(',','.')).toFixed(1);
+  }
+  if(!chip){chip='?';missing.push('puce');}
+  // COULEUR
+  const ct=(colour+' '+product).toLowerCase(); let col='';
+  const cm=[[/space\s*black|noir\s*sid/,'NS'],[/space\s*gr[ae]y|gris\s*sid/,'GS'],[/silver|argent|\bsil\b/,'AR'],[/starlight|lumi/,'LS'],[/midnight|minuit/,'MN'],[/sky\s*blue|bleu\s*ciel/,'BC'],[/gold|\bor\b/,'OR']];
+  for(const [re,c] of cm){ if(re.test(ct)){col=c;break;} }
+  if(!col){col='??';missing.push('couleur');}
+  // GRADE
+  let gr=(grade||'').toUpperCase(); if(!['A','B','C','Z'].includes(gr)){gr='?';missing.push('grade');}
+  const sku=[mdl,yr,ssd,ram,chip,col,gr].join('-');
+  const target=form.querySelector('[name="sku_scanned"]'); if(target) target.value=sku;
+  const info=form.querySelector('.sku-info');
+  if(info){
+    if(missing.length){ info.textContent='⚠︎ '+sku+' — à vérifier : '+missing.join(', '); info.style.color='var(--amber)'; }
+    else { info.textContent='✓ '+sku+' — pense à Enregistrer'; info.style.color='var(--green)'; }
+  }
+}
+</script>
 {% endblock %}
