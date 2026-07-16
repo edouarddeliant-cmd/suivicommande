@@ -213,12 +213,37 @@ def order_delete(oid: int, db: Session = Depends(get_db), _=Depends(require_ui))
 
 @app.post("/machines/{mid}")
 def machine_update(mid: int, request: Request, db: Session = Depends(get_db), _=Depends(require_ui),
-                   recu: str = Form(""), probleme: str = Form("RAS"), commentaire: str = Form("")):
+                   product_name: str = Form(""), manufacturer: str = Form(""), model: str = Form(""),
+                   variant: str = Form(""), capacity: str = Form(""), colour: str = Form(""),
+                   network: str = Form(""), item_id: str = Form(""), sku_requested: str = Form(""),
+                   sku_scanned: str = Form(""), serial: str = Form(""), imei: str = Form(""),
+                   grade: str = Form(""), unit_price: str = Form(""),
+                   physical_status: str = Form(""), location: str = Form(""),
+                   recu: str = Form(""), probleme: str = Form(""), commentaire: str = Form("")):
     m = db.get(Machine, mid)
     if not m:
         raise HTTPException(404)
-    m.recu = (recu == "on" or recu == "true" or recu == "Oui")
-    m.probleme = probleme or "RAS"
+    m.product_name = product_name
+    m.manufacturer = manufacturer
+    m.model = model
+    m.variant = variant
+    m.capacity = capacity
+    m.colour = colour
+    m.network = network
+    m.item_id = item_id
+    m.sku_requested = sku_requested
+    m.sku_scanned = sku_scanned
+    m.serial = serial
+    m.imei = imei
+    m.grade = grade
+    try:
+        m.unit_price = float(str(unit_price).replace(",", ".").strip() or 0)
+    except ValueError:
+        pass
+    m.physical_status = physical_status
+    m.location = location
+    m.recu = (recu in ("on", "true", "Oui", "1"))
+    m.probleme = (probleme or "").strip() or "RAS"
     m.commentaire = commentaire
     db.commit()
     return RedirectResponse(f"/orders/{m.order_id}", status_code=303)
