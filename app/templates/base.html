@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Suivi des commandes{% endblock %}</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>header nav input[type=search]::placeholder{color:rgba(255,255,255,.8)}
+header nav input[type=search]:focus{outline:none;background:rgba(255,255,255,.25)}
+.machine summary::-webkit-details-marker{display:none}
+.machine[open]>summary{border-bottom:1px solid var(--line)}</style>
 </head>
 <body>
 <header>
@@ -13,6 +17,10 @@
     <a href="/">Tableau de bord</a>
     <a href="/orders">Commandes</a>
     <a href="/import">Importer</a>
+    <form method="get" action="/orders" style="display:flex;gap:6px;align-items:center">
+      <input type="search" name="q" placeholder="🔍 N° de commande, proforma…"
+             style="min-width:210px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.35);color:#fff">
+    </form>
   </nav>
 </header>
 <div class="wrap">
