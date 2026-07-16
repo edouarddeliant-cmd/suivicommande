@@ -46,29 +46,50 @@
   </div>
 </div>
 
-<h2>Machines ({{ o.machines|length }})</h2>
-<div class="panel"><table>
-<thead><tr><th>#</th><th>Modèle</th><th>Serial / IMEI</th><th>Grade</th><th>SKU dem.≟scan.</th><th>Reçu</th><th>Problème</th><th>Commentaire</th></tr></thead>
-<tbody>
+<h2>Machines ({{ o.machines|length }}) <span class="muted" style="font-size:13px;font-weight:normal">— clique sur une ligne pour voir/modifier le détail</span></h2>
 {% for m in o.machines %}
-<tr>
-  <td>{{ loop.index }}</td>
-  <td>{{ m.model or m.product_name }} {{ m.capacity }}</td>
-  <td style="font-family:monospace">{{ m.serial or m.imei }}</td>
-  <td>{{ m.grade }}</td>
-  <td>{% if m.sku_requested and m.sku_scanned and m.sku_requested!=m.sku_scanned %}<span class="badge b-red">≠</span>{% else %}<span class="badge b-green">OK</span>{% endif %}</td>
-  <td colspan="3">
-    <form method="post" action="/machines/{{ m.id }}" style="display:flex;gap:8px;align-items:center">
-      <label><input type="checkbox" name="recu" {{ 'checked' if m.recu }}> reçu</label>
-      <select name="probleme">{% for p in ['RAS','Manquant','Defaut','Mauvais modele','Autre'] %}<option {{ 'selected' if m.probleme==p }}>{{ p }}</option>{% endfor %}</select>
-      <input name="commentaire" value="{{ m.commentaire }}" placeholder="commentaire" style="flex:1">
-      <button class="btn">OK</button>
-    </form>
-  </td>
-</tr>
+{% set probleme_flag = m.probleme and (m.probleme|upper) not in ['', 'RAS'] %}
+{% set sku_mismatch = m.sku_requested and m.sku_scanned and m.sku_requested != m.sku_scanned %}
+<details class="panel machine" style="padding:0;margin-bottom:10px">
+  <summary style="padding:12px 16px;cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <b>#{{ loop.index }}</b>
+    <span>{{ [m.manufacturer, m.model, m.variant, m.capacity, m.colour]|select|join(' ') or m.product_name or '—' }}</span>
+    <span style="font-family:monospace">{{ m.serial or m.imei or '—' }}</span>
+    <span class="badge b-grey">Grade {{ m.grade or '?' }}</span>
+    {% if m.recu %}<span class="badge b-green">✓ reçu</span>{% else %}<span class="badge b-amber">non reçu</span>{% endif %}
+    {% if sku_mismatch %}<span class="badge b-red">SKU ≠</span>{% endif %}
+    {% if probleme_flag %}<span class="badge b-red">⚠︎ {{ m.probleme }}</span>{% endif %}
+  </summary>
+  <form method="post" action="/machines/{{ m.id }}" style="padding:4px 16px 16px">
+    <div class="grid2">
+      <div class="field"><label>Fabricant</label><input name="manufacturer" value="{{ m.manufacturer }}"></div>
+      <div class="field"><label>Modèle</label><input name="model" value="{{ m.model }}"></div>
+      <div class="field"><label>Variante (puce / CPU / GPU)</label><input name="variant" value="{{ m.variant }}"></div>
+      <div class="field"><label>Capacité (SSD)</label><input name="capacity" value="{{ m.capacity }}"></div>
+      <div class="field"><label>RAM / Couleur</label><input name="colour" value="{{ m.colour }}"></div>
+      <div class="field"><label>Langue / Réseau</label><input name="network" value="{{ m.network }}"></div>
+      <div class="field" style="grid-column:1/-1"><label>Nom produit complet (ASN / facture)</label><input name="product_name" value="{{ m.product_name }}"></div>
+      <div class="field"><label>Grade</label><input name="grade" value="{{ m.grade }}"></div>
+      <div class="field"><label>Prix unitaire</label><input name="unit_price" value="{{ m.unit_price }}"></div>
+      <div class="field"><label>N° de série</label><input name="serial" value="{{ m.serial }}" style="font-family:monospace"></div>
+      <div class="field"><label>IMEI</label><input name="imei" value="{{ m.imei }}" style="font-family:monospace"></div>
+      <div class="field"><label>SKU demandé</label><input name="sku_requested" value="{{ m.sku_requested }}"></div>
+      <div class="field"><label>SKU scanné</label><input name="sku_scanned" value="{{ m.sku_scanned }}"></div>
+      <div class="field"><label>Item ID</label><input name="item_id" value="{{ m.item_id }}"></div>
+      <div class="field"><label>Statut physique</label><input name="physical_status" value="{{ m.physical_status }}"></div>
+      <div class="field"><label>Emplacement</label><input name="location" value="{{ m.location }}"></div>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--line);margin:14px 0">
+    <div class="grid2">
+      <div class="field"><label>Problème (texte libre — laisser vide si RAS)</label><input name="probleme" value="{{ '' if (m.probleme|upper) in ['', 'RAS'] else m.probleme }}" placeholder="ex. écran rayé, mauvais modèle livré…"></div>
+      <div class="field"><label>Commentaire</label><input name="commentaire" value="{{ m.commentaire }}"></div>
+    </div>
+    <label style="display:inline-flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" name="recu" {{ 'checked' if m.recu }}> Machine reçue</label>
+    <div style="margin-top:12px"><button class="btn primary">Enregistrer cette machine</button></div>
+  </form>
+</details>
 {% endfor %}
-{% if not o.machines %}<tr><td colspan="8" class="muted" style="text-align:center;padding:18px">Aucune machine (ASN pas encore importé).</td></tr>{% endif %}
-</tbody></table></div>
+{% if not o.machines %}<div class="panel muted" style="text-align:center;padding:18px">Aucune machine (ASN pas encore importé).</div>{% endif %}
 
 <form method="post" action="/orders/{{ o.id }}/delete" onsubmit="return confirm('Supprimer cette commande et ses machines ?')" style="margin-top:18px">
   <button class="btn" style="color:var(--red)">Supprimer la commande</button>
