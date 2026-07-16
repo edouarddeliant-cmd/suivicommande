@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="panel">
+  <form class="filters" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="Rechercher (bon de cmd, proforma, facture, fournisseur…)" style="min-width:280px">
+    <select name="paiement"><option value="">Paiement : tous</option>
+      <option {{ 'selected' if paiement=='A payer' }}>A payer</option>
+      <option {{ 'selected' if paiement=='Paye' }}>Paye</option></select>
+    <select name="reception"><option value="">Réception : toutes</option>
+      <option {{ 'selected' if reception=='Non recu' }}>Non recu</option>
+      <option {{ 'selected' if reception=='Partiel' }}>Partiel</option>
+      <option {{ 'selected' if reception=='Complet' }}>Complet</option></select>
+    <button class="btn primary">Filtrer</button>
+    <a class="btn" href="/orders">Réinitialiser</a>
+  </form>
+  <table>
+  <thead><tr><th>Bon de cmd</th><th>Proforma</th><th>Facture</th><th>Fournisseur</th><th>Pays</th><th>Qté</th><th>Montant</th><th>TVA</th><th>Paiement</th><th>UPS</th><th>Exp/Reçu</th><th>Contrôle</th><th>Action</th></tr></thead>
+  <tbody>
+  {% for v in views %}
+  <tr onclick="location='/orders/{{ v.id }}'" style="cursor:pointer">
+    <td><b>{{ v.bon_commande }}</b></td><td>{{ v.proforma }}</td><td>{{ v.facture }}</td>
+    <td>{{ v.fournisseur }}</td><td>{{ v.pays }}</td><td>{{ v.nb_machines }}</td>
+    <td>{{ "%.0f"|format(v.montant_total) }} {{ v.devise }}</td><td>{{ v.tva_regime }}</td>
+    <td><span class="badge {{ 'b-green' if v.paiement=='Paye' else 'b-red' }}">{{ v.paiement }}</span></td>
+    <td><span class="badge {{ 'b-green' if v.etiquette_ups=='Creee' else 'b-amber' }}">{{ v.etiquette_ups }}</span></td>
+    <td>{{ v.nb_expedie }}/{{ v.nb_recu }}{% if v.nb_probleme %} ⚠︎{{ v.nb_probleme }}{% endif %}</td>
+    <td><span class="badge {{ {'Conforme':'b-green','Manquant a reception':'b-red','Defaut(s) signale(s)':'b-amber','En attente reception':'b-blue'}.get(v.statut_controle,'b-grey') }}">{{ v.statut_controle }}</span></td>
+    <td><span class="badge b-{{ v.action_cls }}">{{ v.action }}</span></td>
+  </tr>
+  {% endfor %}
+  {% if not views %}<tr><td colspan="13" class="muted" style="text-align:center;padding:22px">Aucune commande.</td></tr>{% endif %}
+  </tbody></table>
+</div>
+{% endblock %}

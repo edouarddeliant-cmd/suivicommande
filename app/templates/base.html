@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Suivi des commandes{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>📦 Suivi des commandes</h1>
+  <nav>
+    <a href="/">Tableau de bord</a>
+    <a href="/orders">Commandes</a>
+    <a href="/import">Importer</a>
+  </nav>
+</header>
+<div class="wrap">
+  {% block body %}{% endblock %}
+</div>
+</body>
+</html>

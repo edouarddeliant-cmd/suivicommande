@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://suivi:${DB_PASSWORD:-changeme}@db:5432/suivi
+      - APP_USER=${APP_USER:-admin}
+      - APP_PASSWORD=${APP_PASSWORD:?definir APP_PASSWORD}
+      - API_TOKEN=${API_TOKEN:?definir API_TOKEN}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=suivi
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+      - POSTGRES_DB=suivi
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U suivi"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  db_data:

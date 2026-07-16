@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ o.bon_commande }} — Suivi{% endblock %}
+{% block body %}
+<p><a href="/orders">← Commandes</a></p>
+<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+  <h2 style="margin:0">{{ o.bon_commande }}</h2>
+  <span class="badge b-{{ v.action_cls }}">{{ v.action }}</span>
+  <span class="muted">{{ o.fournisseur }} · {{ o.pays }} · {{ o.date_commande }}</span>
+</div>
+
+<div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-top:16px" class="detailgrid">
+  <div class="panel" style="padding:16px">
+    <h2 style="margin-top:0">Commande</h2>
+    <div class="grid2">
+      <div><span class="muted">Proforma</span><br>{{ o.proforma or '—' }}</div>
+      <div><span class="muted">Facture</span><br>{{ o.facture or '—' }}</div>
+      <div><span class="muted">Description</span><br>{{ o.description or '—' }}</div>
+      <div><span class="muted">Quantité</span><br>{{ o.nb_machines }}</div>
+      <div><span class="muted">Montant</span><br><b>{{ "%.2f"|format(o.montant_total) }} {{ o.devise }}</b></div>
+      <div><span class="muted">Régime TVA</span><br>{{ o.tva_regime }}</div>
+      <div><span class="muted">Expédié / Reçu</span><br>{{ v.nb_expedie }} / {{ v.nb_recu }}{% if v.nb_probleme %} · ⚠︎ {{ v.nb_probleme }} problème(s){% endif %}</div>
+      <div><span class="muted">Contrôle</span><br>{{ v.statut_controle }}</div>
+    </div>
+    {% if o.notes %}<p class="muted" style="margin-top:12px;font-size:12px">{{ o.notes }}</p>{% endif %}
+  </div>
+
+  <div class="panel" style="padding:16px">
+    <h2 style="margin-top:0">Statuts</h2>
+    <form method="post" action="/orders/{{ o.id }}/update">
+      <div class="field"><label>Paiement</label>
+        <select name="paiement">{% for x in ['A payer','Paye'] %}<option {{ 'selected' if o.paiement==x }}>{{ x }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Date paiement</label><input name="date_paiement" value="{{ o.date_paiement }}" placeholder="JJ/MM/AAAA"></div>
+      <div class="field"><label>Étiquette UPS</label>
+        <select name="etiquette_ups">{% for x in ['A creer','Creee'] %}<option {{ 'selected' if o.etiquette_ups==x }}>{{ x }}</option>{% endfor %}</select></div>
+      <div class="field"><label>N° tracking UPS</label><input name="tracking_ups" value="{{ o.tracking_ups }}"></div>
+      <div class="field"><label>Expédition</label>
+        <select name="expedition">{% for x in ['En attente','Expedie'] %}<option {{ 'selected' if o.expedition==x }}>{{ x }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Date expédition</label><input name="date_expedition" value="{{ o.date_expedition }}"></div>
+      <div class="field"><label>Réception</label>
+        <select name="reception">{% for x in ['Non recu','Partiel','Complet'] %}<option {{ 'selected' if o.reception==x }}>{{ x }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Date réception</label><input name="date_reception" value="{{ o.date_reception }}"></div>
+      <div class="field"><label>Facture</label><input name="facture" value="{{ o.facture }}"></div>
+      <input type="hidden" name="notes" value="{{ o.notes|e }}">
+      <button class="btn primary">Enregistrer</button>
+    </form>
+  </div>
+</div>
+
+<h2>Machines ({{ o.machines|length }})</h2>
+<div class="panel"><table>
+<thead><tr><th>#</th><th>Modèle</th><th>Serial / IMEI</th><th>Grade</th><th>SKU dem.≟scan.</th><th>Reçu</th><th>Problème</th><th>Commentaire</th></tr></thead>
+<tbody>
+{% for m in o.machines %}
+<tr>
+  <td>{{ loop.index }}</td>
+  <td>{{ m.model or m.product_name }} {{ m.capacity }}</td>
+  <td style="font-family:monospace">{{ m.serial or m.imei }}</td>
+  <td>{{ m.grade }}</td>
+  <td>{% if m.sku_requested and m.sku_scanned and m.sku_requested!=m.sku_scanned %}<span class="badge b-red">≠</span>{% else %}<span class="badge b-green">OK</span>{% endif %}</td>
+  <td colspan="3">
+    <form method="post" action="/machines/{{ m.id }}" style="display:flex;gap:8px;align-items:center">
+      <label><input type="checkbox" name="recu" {{ 'checked' if m.recu }}> reçu</label>
+      <select name="probleme">{% for p in ['RAS','Manquant','Defaut','Mauvais modele','Autre'] %}<option {{ 'selected' if m.probleme==p }}>{{ p }}</option>{% endfor %}</select>
+      <input name="commentaire" value="{{ m.commentaire }}" placeholder="commentaire" style="flex:1">
+      <button class="btn">OK</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+{% if not o.machines %}<tr><td colspan="8" class="muted" style="text-align:center;padding:18px">Aucune machine (ASN pas encore importé).</td></tr>{% endif %}
+</tbody></table></div>
+
+<form method="post" action="/orders/{{ o.id }}/delete" onsubmit="return confirm('Supprimer cette commande et ses machines ?')" style="margin-top:18px">
+  <button class="btn" style="color:var(--red)">Supprimer la commande</button>
+</form>
+{% endblock %}

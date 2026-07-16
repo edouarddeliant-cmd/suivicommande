@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="kpis">
+  <div class="kpi blue"><div class="lab">Commandes</div><div class="val">{{ kpis.total }}</div></div>
+  <div class="kpi red"><div class="lab">À payer</div><div class="val">{{ kpis.a_payer }}</div></div>
+  <div class="kpi green"><div class="lab">Payées</div><div class="val">{{ kpis.payees }}</div></div>
+  <div class="kpi amber"><div class="lab">Étiquettes UPS à créer</div><div class="val">{{ kpis.ups_a_creer }}</div></div>
+  <div class="kpi blue"><div class="lab">Attente réception</div><div class="val">{{ kpis.attente_recep }}</div></div>
+  <div class="kpi amber"><div class="lab">Écarts à traiter</div><div class="val">{{ kpis.ecarts }}</div></div>
+  <div class="kpi green"><div class="lab">Terminées</div><div class="val">{{ kpis.terminees }}</div></div>
+  <div class="kpi red"><div class="lab">Montant à payer</div><div class="val" style="font-size:20px">{{ dues }}</div></div>
+</div>
+
+<h2>Que faire ensuite</h2>
+<div class="actions">
+  {% for k in [1,2,3,4,5,6] %}
+  {% set meta = action_meta[k] %}
+  <div class="acard {{ meta[0] }}">
+    <div class="n">{{ groups.get(k, 0) }}</div>
+    <div class="t">{{ {1:'1. À payer',2:'2. Créer étiquette UPS',3:'3. Attente expédition',4:'4. Réceptionner / contrôler',5:'5. Traiter les écarts',6:'✅ Terminé'}[k] }}</div>
+    <div class="d">{{ meta[1] }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Commandes prioritaires</h2>
+<div class="panel"><table>
+<thead><tr><th>Bon de cmd</th><th>Fournisseur</th><th>Pays</th><th>Qté</th><th>Montant</th><th>Paiement</th><th>Réception</th><th>Prochaine action</th></tr></thead>
+<tbody>
+{% for v in views %}
+<tr onclick="location='/orders/{{ v.id }}'" style="cursor:pointer">
+  <td><b>{{ v.bon_commande }}</b></td>
+  <td>{{ v.fournisseur }}</td>
+  <td>{{ v.pays }}</td>
+  <td>{{ v.nb_machines }}</td>
+  <td>{{ "%.0f"|format(v.montant_total) }} {{ v.devise }}</td>
+  <td><span class="badge {{ 'b-green' if v.paiement=='Paye' else 'b-red' }}">{{ v.paiement }}</span></td>
+  <td><span class="badge {{ {'Complet':'b-green','Partiel':'b-amber','Non recu':'b-red'}.get(v.reception,'b-grey') }}">{{ v.reception }}</span></td>
+  <td><span class="badge b-{{ v.action_cls }}">{{ v.action }}</span></td>
+</tr>
+{% endfor %}
+{% if not views %}<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">Aucune commande. <a href="/import">Importer une proforma</a></td></tr>{% endif %}
+</tbody></table></div>
+{% endblock %}
