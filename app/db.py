@@ -42,6 +42,8 @@ class Order(Base):
     date_expedition: Mapped[str] = mapped_column(String(20), default="")
     reception: Mapped[str] = mapped_column(String(16), default="Non recu")
     date_reception: Mapped[str] = mapped_column(String(20), default="")
+    stock_odoo: Mapped[bool] = mapped_column(Boolean, default=False)
+    date_stock: Mapped[str] = mapped_column(String(20), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
     machines: Mapped[list["Machine"]] = relationship(back_populates="order", cascade="all, delete-orphan")
@@ -78,3 +80,16 @@ class Machine(Base):
 
 def init_db():
     Base.metadata.create_all(engine)
+    # Migrations idempotentes : ajoute les colonnes récentes aux bases existantes (PostgreSQL).
+    if engine.dialect.name == "postgresql":
+        from sqlalchemy import text
+        alters = [
+            "ALTER TABLE orders ADD COLUMN IF NOT EXISTS stock_odoo BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE orders ADD COLUMN IF NOT EXISTS date_stock VARCHAR(20) DEFAULT ''",
+        ]
+        with engine.begin() as conn:
+            for stmt in alters:
+                try:
+                    conn.execute(text(stmt))
+                except Exception:
+                    pass
