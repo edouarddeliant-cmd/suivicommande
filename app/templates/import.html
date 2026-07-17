@@ -18,5 +18,35 @@
       <button class="btn primary" style="margin-top:12px">Importer l'ASN</button>
     </form>
   </div>
+  <div class="panel" style="padding:18px">
+    <h2 style="margin-top:0">Importer une / des facture(s) finale(s)</h2>
+    <p class="muted">Dépose un ou plusieurs PDF de facture finale. Le n° de facture est extrait et renseigné automatiquement sur la commande correspondante (via Callisto / Order No / Sales Order).</p>
+    <form method="post" action="/import/facture" enctype="multipart/form-data">
+      <div class="drop"><input type="file" name="files" accept="application/pdf" multiple required></div>
+      <button class="btn primary" style="margin-top:12px">Importer les factures</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% extends "base.html" %}
+{% block body %}
+{% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px" class="detailgrid">
+  <div class="panel" style="padding:18px">
+    <h2 style="margin-top:0">Importer une / des proforma(s)</h2>
+    <p class="muted">Dépose un ou plusieurs PDF de proforma. Chaque commande est créée automatiquement (les doublons sont ignorés).</p>
+    <form method="post" action="/import/proforma" enctype="multipart/form-data">
+      <div class="drop"><input type="file" name="files" accept="application/pdf" multiple required></div>
+      <button class="btn primary" style="margin-top:12px">Importer les proformas</button>
+    </form>
+  </div>
+  <div class="panel" style="padding:18px">
+    <h2 style="margin-top:0">Importer un ASN</h2>
+    <p class="muted">Dépose le CSV ASN. Les machines sont ajoutées et rattachées automatiquement à la commande (via le numéro dans le nom du fichier), qui passe en « Expédié ».</p>
+    <form method="post" action="/import/asn" enctype="multipart/form-data">
+      <div class="drop"><input type="file" name="file" accept=".csv" required></div>
+      <button class="btn primary" style="margin-top:12px">Importer l'ASN</button>
+    </form>
+  </div>
 </div>
 {% endblock %}
