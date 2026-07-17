@@ -135,6 +135,32 @@ def ingest_asn_bytes(db: Session, content: bytes, filename: str):
             "ship_date": ship_date}
 
 
+def ingest_facture_file(db: Session, tmp_path: str, filename: str):
+    rec = extract.parse_invoice(tmp_path, filename)
+    inv = rec.get("invoice_no", "")
+    orders = db.scalars(select(Order)).all()
+    order = None
+    # 1) Sales Order exact (fournisseurs type PCS dont le bon = SOxxxxxx)
+    so = rec.get("sales_order")
+    if so:
+        order = next((o for o in orders if o.bon_commande == so or _digits(o.bon_commande) == _digits(so)), None)
+    # 2) Callisto -> bon de commande (#chiffres)
+    if not order and rec.get("callisto"):
+        d = _digits(rec["callisto"])
+        order = next((o for o in orders if _digits(o.bon_commande) == d), None)
+    # 3) Order No -> proforma
+    if not order and rec.get("proforma"):
+        d = _digits(rec["proforma"])
+        order = next((o for o in orders if _digits(o.proforma) == d), None)
+    if not order:
+        return {"file": filename, "status": "commande introuvable", "invoice_no": inv}
+    if not inv:
+        return {"file": filename, "status": "n° de facture introuvable", "bon_commande": order.bon_commande}
+    order.facture = inv
+    db.commit()
+    return {"file": filename, "status": "facture renseignee", "bon_commande": order.bon_commande, "invoice_no": inv}
+
+
 # ---------------- UI ----------------
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db), _=Depends(require_ui)):
@@ -199,6 +225,19 @@ def order_update(oid: int, request: Request, db: Session = Depends(get_db), _=De
     o.date_reception = date_reception
     o.facture = facture
     o.notes = notes
+    db.commit()
+    return RedirectResponse(f"/orders/{oid}", status_code=303)
+
+
+@app.post("/orders/{oid}/stock")
+def order_stock(oid: int, db: Session = Depends(get_db), _=Depends(require_ui),
+                etat: str = Form("")):
+    import datetime
+    o = db.get(Order, oid)
+    if not o:
+        raise HTTPException(404)
+    o.stock_odoo = etat in ("on", "true", "1", "Oui")
+    o.date_stock = datetime.date.today().strftime("%d/%m/%Y") if o.stock_odoo else ""
     db.commit()
     return RedirectResponse(f"/orders/{oid}", status_code=303)
 
@@ -280,6 +319,24 @@ async def import_asn(request: Request, db: Session = Depends(get_db), _=Depends(
     return RedirectResponse(f"/import?msg={msg}", status_code=303)
 
 
+@app.post("/import/facture")
+async def import_facture(request: Request, db: Session = Depends(get_db), _=Depends(require_ui),
+                         files: list[UploadFile] = File(...)):
+    results = []
+    for f in files:
+        data = await f.read()
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(data); path = tmp.name
+        try:
+            results.append(ingest_facture_file(db, path, f.filename))
+        finally:
+            os.unlink(path)
+    msg = " | ".join(f"{r['file']}: {r['status']}"
+                     + (f" ({r.get('invoice_no')} → {r.get('bon_commande')})" if r['status'] == 'facture renseignee' else "")
+                     for r in results)
+    return RedirectResponse(f"/import?msg={msg}", status_code=303)
+
+
 # ---------------- API JSON ----------------
 @app.get("/api/orders")
 def api_orders(db: Session = Depends(get_db), _=Depends(require_api)):
@@ -306,6 +363,21 @@ async def api_asn(db: Session = Depends(get_db), _=Depends(require_api),
                   file: UploadFile = File(...)):
     data = await file.read()
     return ingest_asn_bytes(db, data, file.filename)
+
+
+@app.post("/api/facture")
+async def api_facture(db: Session = Depends(get_db), _=Depends(require_api),
+                      files: list[UploadFile] = File(...)):
+    out = []
+    for f in files:
+        data = await f.read()
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(data); path = tmp.name
+        try:
+            out.append(ingest_facture_file(db, path, f.filename))
+        finally:
+            os.unlink(path)
+    return {"results": out}
 
 
 @app.patch("/api/orders/{bon}")
