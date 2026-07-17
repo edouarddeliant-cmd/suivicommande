@@ -33,7 +33,9 @@ def prochaine_action(order):
         return (4, "4. Réceptionner / contrôler")
     if nb_recu < nb_exp or nb_prob > 0:
         return (5, "5. Traiter les écarts")
-    return (6, "✅ Terminé")
+    if not getattr(order, "stock_odoo", False):
+        return (6, "6. À rentrer dans Odoo")
+    return (7, "✅ Terminé")
 
 
 ACTION_META = {
@@ -42,7 +44,8 @@ ACTION_META = {
     3: ("blue", "UPS OK, attente départ fournisseur"),
     4: ("blue", "Expédiée, à réceptionner / vérifier"),
     5: ("amber", "Machine manquante ou défaut signalé"),
-    6: ("green", "Reçue, complète et conforme"),
+    6: ("amber", "Audit conforme, à saisir dans Odoo"),
+    7: ("green", "En stock Odoo — clôturée"),
 }
 
 
@@ -73,6 +76,8 @@ def order_view(order):
         "date_expedition": order.date_expedition,
         "reception": order.reception,
         "date_reception": order.date_reception,
+        "stock_odoo": getattr(order, "stock_odoo", False),
+        "date_stock": getattr(order, "date_stock", ""),
         "notes": order.notes,
         "nb_expedie": nb_exp,
         "nb_recu": nb_recu,
@@ -98,6 +103,7 @@ def kpis(orders):
         "ups_a_creer": c(lambda o: o["paiement"] == "Paye" and o["etiquette_ups"] == "A creer"),
         "attente_recep": c(lambda o: o["expedition"] == "Expedie" and o["reception"] != "Complet"),
         "ecarts": c(lambda o: o["statut_controle"] in ("Manquant a reception", "Defaut(s) signale(s)")),
-        "terminees": c(lambda o: o["action_k"] == 6),
+        "a_saisir_odoo": c(lambda o: o["action_k"] == 6),
+        "terminees": c(lambda o: o["action_k"] == 7),
         "dues": dues,
     }
