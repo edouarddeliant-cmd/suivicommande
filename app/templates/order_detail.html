@@ -8,6 +8,23 @@
   <span class="muted">{{ o.fournisseur }} · {{ o.pays }} · {{ o.date_commande }}</span>
 </div>
 
+<div class="panel" style="padding:12px 16px;margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <b>Stock Odoo</b>
+  {% if o.stock_odoo %}
+    <span class="badge b-green">✔ Saisie faite{% if o.date_stock %} le {{ o.date_stock }}{% endif %}</span>
+    <form method="post" action="/orders/{{ o.id }}/stock" style="display:inline">
+      <input type="hidden" name="etat" value="off">
+      <button class="btn" style="padding:5px 12px;font-size:12px">Annuler la saisie Odoo</button>
+    </form>
+  {% else %}
+    <span class="muted">pas encore saisie dans Odoo</span>
+    <form method="post" action="/orders/{{ o.id }}/stock" style="display:inline">
+      <input type="hidden" name="etat" value="on">
+      <button class="btn primary">📦 Marquer comme rentrée dans Odoo</button>
+    </form>
+  {% endif %}
+</div>
+
 <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-top:16px" class="detailgrid">
   <div class="panel" style="padding:16px">
     <h2 style="margin-top:0">Commande</h2>
@@ -131,8 +148,8 @@ function genSku(form){
   let chip=''; const am=hay.match(/m([1-4])\s*(pro|max|ultra)?/i);
   if(am){
     const gen=am[1], tier={pro:'P',max:'M',ultra:'U'}[(am[2]||'').toLowerCase()]||'';
-    const cpu=(hay.match(/(\d+)\s*[- ]?core\s*cpu/i)||hay.match(/(\d+)\s*cœurs?\s*cpu/i)||[])[1]||'';
-    const gpu=(hay.match(/(\d+)\s*[- ]?core\s*gpu/i)||hay.match(/(\d+)\s*cœurs?\s*gpu/i)||[])[1]||'';
+    const cpu=(hay.match(/(\d+)\s*[-_ ]?core\s*cpu/i)||hay.match(/(\d+)\s*cœurs?\s*cpu/i)||[])[1]||'';
+    const gpu=(hay.match(/(\d+)\s*[-_ ]?core\s*gpu/i)||hay.match(/(\d+)\s*cœurs?\s*gpu/i)||[])[1]||'';
     if(gen&&cpu&&gpu) chip='M'+gen+tier+cpu+'C'+gpu+'G';
   } else {
     const im=hay.match(/i([3579])\b/i), gh=hay.match(/([\d.,]+)\s*g?hz/i);
