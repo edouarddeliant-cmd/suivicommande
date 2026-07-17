@@ -165,6 +165,26 @@ def detect_asn_date(name):
     return ""
 
 
+def parse_invoice(path, filename=None):
+    """Extrait le n° de facture finale + la référence de commande (Callisto / Order No / Sales Order)."""
+    txt = _pdftotext(path)
+    fname = filename or os.path.basename(path)
+    r = {"flags": []}
+    inv = (_grab(r"Invoice\s+N(?:o|umber|°)?\.?\s+([A-Z]{2,}[\w./-]*\d[\w./-]*)", txt, re.IGNORECASE)
+           or _grab(r"\b(INVNL\d+)\b", txt)
+           or _grab(r"\b(IN\d{5,})\b", txt))
+    r["invoice_no"] = inv or ""
+    r["callisto"] = _grab(r"Callisto No\.?\s+(\d+)", txt)
+    r["proforma"] = _grab(r"Order No\.?\s+(SO\d+)", txt)
+    r["sales_order"] = _grab(r"Sales Order\s+(SO?\d+)", txt)
+    if not (r["callisto"] or r["proforma"] or r["sales_order"]):
+        c2 = _grab(r"SO[_ ]?(\d{5,7})", fname)
+        if c2:
+            r["callisto"] = c2
+            r["flags"].append("réf reprise du nom de fichier")
+    return r
+
+
 def parse_asn(content_bytes, filename):
     text = content_bytes.decode("utf-8-sig", errors="replace")
     rows = list(csv.DictReader(io.StringIO(text)))
