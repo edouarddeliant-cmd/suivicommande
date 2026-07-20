@@ -79,6 +79,44 @@ def test_connection():
         return {"ok": False, "error": str(e)[:250]}
 
 
+def _norm(s):
+    import re
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def find_supplier(name):
+    """Rapproche le fournisseur par nom, en tolérant les petites différences
+    (ex. « Solutions » vs « Solution », ponctuation, accents). Renvoie l'id ou None."""
+    import re
+    import difflib
+    name = (name or "").strip()
+    if not name:
+        return None
+    # 1) exact puis ilike sur le nom complet
+    pid = (_exec("res.partner", "search", [["name", "=", name]], limit=1)
+           or _exec("res.partner", "search", [["name", "ilike", name]], limit=1))
+    if pid:
+        return pid[0]
+    # 2) tolérant : candidats du 1er mot, comparaison normalisée
+    tn = _norm(name)
+    token = re.split(r"\s+", name)[0]
+    cands = _exec("res.partner", "search_read", [["name", "ilike", token]],
+                  fields=["id", "name", "supplier_rank"], limit=50) if token else []
+    best, best_r = None, 0.0
+    for c in cands:
+        cn = _norm(c["name"])
+        if cn and (cn == tn or cn in tn or tn in cn):
+            return c["id"]
+        r = difflib.SequenceMatcher(None, cn, tn).ratio()
+        if c.get("supplier_rank", 0) > 0:
+            r += 0.02
+        if r > best_r:
+            best, best_r = c, r
+    if best and best_r >= 0.90:
+        return best["id"]
+    return None
+
+
 def push_order_to_odoo(order):
     """Crée le bon d'achat brouillon dans Odoo. Renvoie un dict de résultat."""
     if not configured():
@@ -94,13 +132,16 @@ def push_order_to_odoo(order):
     except Exception as e:
         return {"ok": False, "error": str(e)}
     try:
-        # --- Fournisseur (par nom) ---
+        # --- Fournisseur (par nom, tolérant) ---
+        import re as _re
         name = (order.fournisseur or "").strip()
-        pid = (_exec("res.partner", "search", [["name", "=", name]], limit=1)
-               or _exec("res.partner", "search", [["name", "ilike", name]], limit=1))
-        if not pid:
-            return {"ok": False, "error": "Fournisseur introuvable dans Odoo : « %s »." % name}
-        partner_id = pid[0]
+        partner_id = find_supplier(name)
+        if not partner_id:
+            token = (_re.split(r"\s+", name)[0] if name else "")
+            cands = _exec("res.partner", "search_read", [["name", "ilike", token]],
+                          fields=["name"], limit=6) if token else []
+            hint = (" Noms proches dans Odoo : " + ", ".join("« %s »" % c["name"] for c in cands)) if cands else ""
+            return {"ok": False, "error": "Fournisseur introuvable dans Odoo : « %s ».%s" % (name, hint)}
 
         # --- Produits (par SKU = reference interne) ---
         skus = sorted({(m.sku_scanned or "").strip() for m in machines})
