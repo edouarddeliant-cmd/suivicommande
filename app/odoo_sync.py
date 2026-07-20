@@ -145,8 +145,12 @@ def push_order_to_odoo(order):
 
         # --- Produits (par SKU = reference interne) ---
         skus = sorted({(m.sku_scanned or "").strip() for m in machines})
-        prods = _exec("product.product", "search_read", [["default_code", "in", skus]],
-                      fields=["id", "default_code", "display_name", "uom_po_id", "uom_id"])
+        try:
+            prods = _exec("product.product", "search_read", [["default_code", "in", skus]],
+                          fields=["id", "default_code", "display_name", "uom_id"])
+        except xmlrpc.client.Fault:
+            prods = _exec("product.product", "search_read", [["default_code", "in", skus]],
+                          fields=["id", "default_code", "display_name"])
         by_sku = {p["default_code"]: p for p in prods}
         missing = [s for s in skus if s not in by_sku]
         if missing:
@@ -171,7 +175,7 @@ def push_order_to_odoo(order):
             vals = {"product_id": p["id"], "product_qty": qty, "price_unit": price,
                     "name": p.get("display_name") or sku}
             if uom_field:
-                uom = p.get("uom_po_id") or p.get("uom_id")
+                uom = p.get("uom_id")
                 if uom:
                     vals[uom_field] = uom[0] if isinstance(uom, (list, tuple)) else uom
             lines.append((0, 0, vals))
