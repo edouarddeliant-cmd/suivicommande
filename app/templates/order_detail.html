@@ -8,6 +8,11 @@
   <span class="muted">{{ o.fournisseur }} · {{ o.pays }} · {{ o.date_commande }}</span>
 </div>
 
+{% set _oq = request.query_params %}
+{% if _oq.get('odoo') == 'ok' %}<div style="background:#e7f7ec;border:1px solid #34c759;color:#1a7f37;padding:10px 14px;border-radius:8px;margin-top:12px">✔ Achat créé dans Odoo (brouillon). Vérifie-le puis confirme-le dans Odoo.</div>{% endif %}
+{% if _oq.get('odoo') == 'exists' %}<div style="background:#fff7e6;border:1px solid #f0ad4e;color:#8a6d3b;padding:10px 14px;border-radius:8px;margin-top:12px">Un achat existe déjà pour cette commande dans Odoo.</div>{% endif %}
+{% if _oq.get('odoo_err') %}<div style="background:#fdecea;border:1px solid #e5534b;color:#b42318;padding:10px 14px;border-radius:8px;margin-top:12px">⚠️ Odoo : {{ _oq.get('odoo_err') }}</div>{% endif %}
+
 <div class="panel" style="padding:12px 16px;margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
   <b>Stock Odoo</b>
   {% if o.stock_odoo %}
@@ -21,6 +26,19 @@
     <form method="post" action="/orders/{{ o.id }}/stock" style="display:inline">
       <input type="hidden" name="etat" value="on">
       <button class="btn primary">📦 Marquer comme rentrée dans Odoo</button>
+    </form>
+  {% endif %}
+</div>
+
+<div class="panel" style="padding:12px 16px;margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <b>Achat Odoo</b>
+  {% if o.odoo_po_id %}
+    <span class="badge b-green">✔ Achat créé{% if o.odoo_po_name %} — {{ o.odoo_po_name }}{% endif %}</span>
+    {% if odoo_base %}<a class="btn" style="padding:5px 12px;font-size:12px" href="{{ odoo_base }}/web#id={{ o.odoo_po_id }}&model=purchase.order&view_type=form" target="_blank" rel="noopener">Ouvrir dans Odoo</a>{% endif %}
+  {% else %}
+    <span class="muted">pas encore créé</span>
+    <form method="post" action="/orders/{{ o.id }}/odoo" style="display:inline">
+      <button class="btn primary">🧾 Créer l'achat dans Odoo (brouillon)</button>
     </form>
   {% endif %}
 </div>
