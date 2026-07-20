@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal, Order, Machine, init_db
-from . import logic, extract
+from . import logic, extract, odoo_sync
 
 BASE = os.path.dirname(__file__)
 app = FastAPI(title="Suivi Commandes Fournisseur")
@@ -202,7 +202,8 @@ def order_detail(oid: int, request: Request, db: Session = Depends(get_db), _=De
     if not o:
         raise HTTPException(404)
     return templates.TemplateResponse("order_detail.html",
-        {"request": request, "o": o, "v": logic.order_view(o)})
+        {"request": request, "o": o, "v": logic.order_view(o),
+         "odoo_base": os.environ.get("ODOO_URL", "").rstrip("/")})
 
 
 @app.post("/orders/{oid}/update")
@@ -240,6 +241,25 @@ def order_stock(oid: int, db: Session = Depends(get_db), _=Depends(require_ui),
     o.date_stock = datetime.date.today().strftime("%d/%m/%Y") if o.stock_odoo else ""
     db.commit()
     return RedirectResponse(f"/orders/{oid}", status_code=303)
+
+
+@app.post("/orders/{oid}/odoo")
+def order_odoo(oid: int, db: Session = Depends(get_db), _=Depends(require_ui)):
+    import urllib.parse
+    o = db.get(Order, oid)
+    if not o:
+        raise HTTPException(404)
+    if getattr(o, "odoo_po_id", ""):
+        return RedirectResponse(f"/orders/{oid}?odoo=exists", status_code=303)
+    res = odoo_sync.push_order_to_odoo(o)
+    if res.get("ok"):
+        o.odoo_po_id = str(res["po_id"])
+        o.odoo_po_name = res.get("po_name", "")
+        db.commit()
+        return RedirectResponse(f"/orders/{oid}?odoo=ok", status_code=303)
+    return RedirectResponse(
+        f"/orders/{oid}?odoo_err=" + urllib.parse.quote(res.get("error", "Erreur inconnue")[:300]),
+        status_code=303)
 
 
 @app.post("/orders/{oid}/delete")
