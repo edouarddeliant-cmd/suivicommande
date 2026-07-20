@@ -44,6 +44,8 @@ class Order(Base):
     date_reception: Mapped[str] = mapped_column(String(20), default="")
     stock_odoo: Mapped[bool] = mapped_column(Boolean, default=False)
     date_stock: Mapped[str] = mapped_column(String(20), default="")
+    odoo_po_id: Mapped[str] = mapped_column(String(32), default="")
+    odoo_po_name: Mapped[str] = mapped_column(String(64), default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
     machines: Mapped[list["Machine"]] = relationship(back_populates="order", cascade="all, delete-orphan")
@@ -86,6 +88,8 @@ def init_db():
         alters = [
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS stock_odoo BOOLEAN DEFAULT FALSE",
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS date_stock VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE orders ADD COLUMN IF NOT EXISTS odoo_po_id VARCHAR(32) DEFAULT ''",
+            "ALTER TABLE orders ADD COLUMN IF NOT EXISTS odoo_po_name VARCHAR(64) DEFAULT ''",
         ]
         with engine.begin() as conn:
             for stmt in alters:
