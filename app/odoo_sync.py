@@ -147,6 +147,17 @@ def push_order_to_odoo(order):
             hint = (" Noms proches dans Odoo : " + ", ".join("« %s »" % c["name"] for c in cands)) if cands else ""
             return {"ok": False, "error": "Fournisseur introuvable dans Odoo : « %s ».%s" % (name, hint)}
 
+        # --- Idempotence : reutiliser un achat deja cree pour cette commande ---
+        ref = (order.bon_commande or "").lstrip("#")
+        if ref:
+            exist = _exec("purchase.order", "search_read",
+                          [["partner_ref", "=", ref], ["partner_id", "=", partner_id],
+                           ["state", "!=", "cancel"]],
+                          fields=["id", "name"], limit=1)
+            if exist:
+                return {"ok": True, "po_id": exist[0]["id"], "po_name": exist[0]["name"],
+                        "existing": True, "nb_lignes": 0, "nb_machines": len(machines)}
+
         # --- Produits (par SKU = reference interne) ---
         skus = sorted({(m.sku_scanned or "").strip() for m in machines})
         try:
@@ -193,7 +204,8 @@ def push_order_to_odoo(order):
         if eur:
             po_vals["currency_id"] = eur[0]
 
-        po_id = _exec("purchase.order", "create", [po_vals])
+        created = _exec("purchase.order", "create", [po_vals])
+        po_id = created[0] if isinstance(created, (list, tuple)) else created
         po = _exec("purchase.order", "read", [po_id], fields=["name"])
         po_name = po[0]["name"] if po else str(po_id)
         return {"ok": True, "po_id": po_id, "po_name": po_name, "rate": rate,
