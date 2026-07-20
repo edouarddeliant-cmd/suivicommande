@@ -30,13 +30,17 @@ def fx_to_eur(devise):
     if d in ("", "EUR", "€"):
         return 1.0
     d = {"$": "USD", "US$": "USD", "£": "GBP"}.get(d, d)
-    try:
-        url = "https://api.frankfurter.app/latest?from=%s&to=EUR" % d
-        with urllib.request.urlopen(url, timeout=15) as r:
-            data = json.loads(r.read().decode())
-        return float(data["rates"]["EUR"])
-    except Exception:
-        return None
+    for url in ("https://api.frankfurter.dev/v1/latest?base=%s&symbols=EUR" % d,
+                "https://open.er-api.com/v6/latest/%s" % d):
+        try:
+            with urllib.request.urlopen(url, timeout=15) as r:
+                data = json.loads(r.read().decode())
+            eur = (data.get("rates") or {}).get("EUR")
+            if eur:
+                return float(eur)
+        except Exception:
+            continue
+    return None
 
 
 def _connect():
