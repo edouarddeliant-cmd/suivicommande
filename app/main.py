@@ -96,12 +96,17 @@ def ingest_asn_bytes(db: Session, content: bytes, filename: str):
                 if _digits(o.proforma) == d:
                     order = o; break
     added = skipped = 0
+    # TVA sur marge : les n° de série doivent se terminer par /TVM (ajout automatique).
+    marge = bool(order and (order.tva_regime or "") == "Marge")
     seen = set()
     if order:
         for m in order.machines:
             seen.add(m.serial or m.imei)
     for md in res["machines"]:
-        key = md.get("serial") or md.get("imei")
+        serial = md.get("serial", "")
+        if marge and serial and not serial.endswith("/TVM"):
+            serial += "/TVM"
+        key = serial or md.get("imei")
         if key and key in seen:
             skipped += 1; continue
         machine = Machine(
@@ -109,7 +114,7 @@ def ingest_asn_bytes(db: Session, content: bytes, filename: str):
             bon_commande=order.bon_commande if order else (ref or ""),
             item_id=md.get("item_id", ""), product_name=md.get("product_name", ""),
             sku_requested=md.get("sku_requested", ""), sku_scanned=md.get("sku_scanned", ""),
-            imei=md.get("imei", ""), serial=md.get("serial", ""),
+            imei=md.get("imei", ""), serial=serial,
             physical_status=md.get("physical_status", ""), location=md.get("location", ""),
             carton=md.get("carton", ""), category=md.get("category", ""),
             manufacturer=md.get("manufacturer", ""), model=md.get("model", ""),
