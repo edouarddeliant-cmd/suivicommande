@@ -16,7 +16,7 @@ def _pdftotext(path):
 
 
 def norm_amount(s):
-    s = str(s).replace("€", "").replace("$", "").replace(" ", "").replace(" ", "").strip()
+    s = str(s).replace("\u20ac", "").replace("$", "").replace(" ", "").replace("\u00a0", "").replace("\u202f", "").strip()
     if not s:
         return None
     if "," in s and "." in s:
@@ -94,9 +94,13 @@ def extract_proforma(path, filename=None):
     r["tva_regime"] = "Marge" if marginal else "Autoliquidation"
     r["tva_montant"] = 0.0
 
-    subtotal = _grab(r"Subtotal[:\s]+[€$]?\s*([\d.,]+)", txt)
+    # Le nombre peut contenir un séparateur de milliers (espace normal, insécable
+    # ou fine insécable) : « €1 150,00 ». On capture donc les espaces internes,
+    # norm_amount() les retire ensuite.
+    NUM = "(\\d[\\d.,\u00a0\u202f ]*\\d|\\d)"
+    subtotal = _grab(r"Subtotal[:\s]+[€$]?\s*" + NUM, txt)
     total = None
-    for m in re.finditer(r"(?<![A-Za-z])Total[:\s]+[€$]?\s*([\d.,]+)", txt, re.IGNORECASE):
+    for m in re.finditer(r"(?<![A-Za-z])Total[:\s]+[€$]?\s*" + NUM, txt, re.IGNORECASE):
         total = m.group(1)
     st = norm_amount(subtotal) if subtotal else None
     tt = norm_amount(total) if total else None
