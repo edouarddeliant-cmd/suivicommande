@@ -80,6 +80,33 @@ class Machine(Base):
     order: Mapped["Order"] = relationship(back_populates="machines")
 
 
+class Avoir(Base):
+    __tablename__ = "avoirs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    numero: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    fournisseur: Mapped[str] = mapped_column(String(128), default="")
+    pays: Mapped[str] = mapped_column(String(64), default="")
+    date_avoir: Mapped[str] = mapped_column(String(20), default="")
+    montant: Mapped[float] = mapped_column(Float, default=0.0)
+    devise: Mapped[str] = mapped_column(String(8), default="")
+    motif: Mapped[str] = mapped_column(Text, default="")
+    callisto_ref: Mapped[str] = mapped_column(String(32), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
+    usages: Mapped[list["AvoirUsage"]] = relationship(back_populates="avoir", cascade="all, delete-orphan")
+
+
+class AvoirUsage(Base):
+    __tablename__ = "avoir_usages"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    avoir_id: Mapped[int] = mapped_column(ForeignKey("avoirs.id", ondelete="CASCADE"), index=True)
+    order_id: Mapped[int] = mapped_column(Integer, nullable=True)
+    bon_commande: Mapped[str] = mapped_column(String(64), default="")
+    montant: Mapped[float] = mapped_column(Float, default=0.0)
+    date_util: Mapped[str] = mapped_column(String(20), default="")
+    avoir: Mapped["Avoir"] = relationship(back_populates="usages")
+
+
 def init_db():
     Base.metadata.create_all(engine)
     # Migrations idempotentes : ajoute les colonnes récentes aux bases existantes (PostgreSQL).
