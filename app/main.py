@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .db import SessionLocal, Order, Machine, init_db
+from .db import SessionLocal, Order, Machine, Avoir, AvoirUsage, init_db
 from . import logic, extract, odoo_sync
 
 BASE = os.path.dirname(__file__)
@@ -164,6 +164,33 @@ def ingest_facture_file(db: Session, tmp_path: str, filename: str):
     order.facture = inv
     db.commit()
     return {"file": filename, "status": "facture renseignee", "bon_commande": order.bon_commande, "invoice_no": inv}
+
+
+def ingest_avoir_file(db: Session, tmp_path: str, filename: str):
+    rec = extract.parse_avoir(tmp_path, filename)
+    num = rec.get("numero", "")
+    if not num:
+        return {"file": filename, "status": "ignore", "reason": "n° d'avoir introuvable"}
+    existing = db.scalar(select(Avoir).where(Avoir.numero == num))
+    if existing:
+        return {"file": filename, "status": "doublon", "numero": num}
+    a = Avoir(numero=num, fournisseur=rec["fournisseur"], pays=rec["pays"],
+              date_avoir=rec["date_avoir"], montant=rec["montant"], devise=rec["devise"],
+              motif=rec["motif"], callisto_ref=rec.get("callisto_ref", ""), notes=rec["notes"])
+    db.add(a); db.commit()
+    return {"file": filename, "status": "cree", "numero": num}
+
+
+def avoir_view(a: Avoir):
+    used = round(sum(u.montant or 0 for u in a.usages), 2)
+    solde = round((a.montant or 0) - used, 2)
+    if used <= 0:
+        statut, cls = "Disponible", "green"
+    elif solde > 0.005:
+        statut, cls = "Partiellement utilisé", "amber"
+    else:
+        statut, cls = "Épuisé", "grey"
+    return {"a": a, "used": used, "solde": solde, "statut": statut, "cls": cls}
 
 
 # ---------------- UI ----------------
@@ -360,6 +387,88 @@ async def import_facture(request: Request, db: Session = Depends(get_db), _=Depe
                      + (f" ({r.get('invoice_no')} → {r.get('bon_commande')})" if r['status'] == 'facture renseignee' else "")
                      for r in results)
     return RedirectResponse(f"/import?msg={msg}", status_code=303)
+
+
+# ---------------- Avoirs ----------------
+@app.get("/avoirs", response_class=HTMLResponse)
+def avoirs_list(request: Request, db: Session = Depends(get_db), _=Depends(require_ui)):
+    avs = db.scalars(select(Avoir).order_by(Avoir.id.desc())).all()
+    views = [avoir_view(a) for a in avs]
+    return templates.TemplateResponse("avoirs.html",
+        {"request": request, "views": views, "msg": request.query_params.get("msg", "")})
+
+
+@app.post("/import/avoir")
+async def import_avoir(request: Request, db: Session = Depends(get_db), _=Depends(require_ui),
+                       files: list[UploadFile] = File(...)):
+    import urllib.parse
+    results = []
+    for f in files:
+        data = await f.read()
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(data); path = tmp.name
+        try:
+            results.append(ingest_avoir_file(db, path, f.filename))
+        finally:
+            os.unlink(path)
+    msg = " | ".join(f"{r['file']}: {r['status']}" for r in results)
+    return RedirectResponse(f"/avoirs?msg=" + urllib.parse.quote(msg), status_code=303)
+
+
+@app.get("/avoirs/{aid}", response_class=HTMLResponse)
+def avoir_detail(aid: int, request: Request, db: Session = Depends(get_db), _=Depends(require_ui)):
+    a = db.get(Avoir, aid)
+    if not a:
+        raise HTTPException(404)
+    orders = db.scalars(select(Order).order_by(Order.id.desc())).all()
+    return templates.TemplateResponse("avoir_detail.html",
+        {"request": request, "a": a, "v": avoir_view(a), "orders": orders,
+         "msg": request.query_params.get("msg", "")})
+
+
+@app.post("/avoirs/{aid}/usage")
+def avoir_add_usage(aid: int, db: Session = Depends(get_db), _=Depends(require_ui),
+                    bon_commande: str = Form(""), montant: str = Form(""), date_util: str = Form("")):
+    import datetime, urllib.parse
+    a = db.get(Avoir, aid)
+    if not a:
+        raise HTTPException(404)
+    try:
+        m = float(str(montant).replace(",", ".").strip() or 0)
+    except ValueError:
+        m = 0.0
+    used = sum(u.montant or 0 for u in a.usages)
+    reste = round((a.montant or 0) - used, 2)
+    if m <= 0:
+        return RedirectResponse(f"/avoirs/{aid}?msg=" + urllib.parse.quote("Montant invalide."), status_code=303)
+    if m > reste + 0.005:
+        m = reste  # on ne dépasse jamais le solde
+    if m <= 0:
+        return RedirectResponse(f"/avoirs/{aid}?msg=" + urllib.parse.quote("Avoir déjà épuisé."), status_code=303)
+    oid = None
+    if bon_commande:
+        o = db.scalar(select(Order).where(Order.bon_commande == bon_commande))
+        oid = o.id if o else None
+    u = AvoirUsage(avoir_id=a.id, order_id=oid, bon_commande=bon_commande, montant=round(m, 2),
+                   date_util=(date_util or datetime.date.today().strftime("%d/%m/%Y")))
+    db.add(u); db.commit()
+    return RedirectResponse(f"/avoirs/{aid}", status_code=303)
+
+
+@app.post("/avoirs/{aid}/usage/{uid}/delete")
+def avoir_del_usage(aid: int, uid: int, db: Session = Depends(get_db), _=Depends(require_ui)):
+    u = db.get(AvoirUsage, uid)
+    if u and u.avoir_id == aid:
+        db.delete(u); db.commit()
+    return RedirectResponse(f"/avoirs/{aid}", status_code=303)
+
+
+@app.post("/avoirs/{aid}/delete")
+def avoir_delete(aid: int, db: Session = Depends(get_db), _=Depends(require_ui)):
+    a = db.get(Avoir, aid)
+    if a:
+        db.delete(a); db.commit()
+    return RedirectResponse("/avoirs", status_code=303)
 
 
 # ---------------- API JSON ----------------
