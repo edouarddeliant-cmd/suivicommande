@@ -189,6 +189,64 @@ def parse_invoice(path, filename=None):
     return r
 
 
+def parse_avoir(path, filename=None):
+    """Extrait un avoir (Credit Memo Alchemy) : n°, fournisseur, pays, date, devise,
+    montant, motif et la référence de la commande d'origine (Callisto)."""
+    txt = _pdftotext(path)
+    lines = [l.rstrip() for l in txt.splitlines()]
+    fname = filename or os.path.basename(path)
+    r = {"flags": []}
+    head = txt.split("Invoice To")[0] if "Invoice To" in txt else txt
+
+    r["numero"] = (_grab(r"Order No\.?\s+(CM\w*\d[\w./-]*)", txt)
+                   or _grab(r"\b(CM\d{4,})\b", txt)
+                   or _grab(r"(CM\d{4,})", fname) or "")
+    r["devise"] = _grab(r"Currency\s+([A-Z]{3})", txt) or ""
+    r["callisto_ref"] = (_grab(r"Callisto ID:?\s*(\d+)", txt)
+                         or _grab(r"Callisto\s*#\s*(\d+)", txt) or "")
+
+    LABELS = ("Date", "Order No", "Callisto", "Payment Method", "Terms", "PO No", "Delivery Terms",
+              "Currency", "Incoterm", "Tax", "Bank", "VAT Registration", "Invoice To", "Ship To",
+              "Customer VAT", "SO #", "Used Devices", "Credit Memo")
+    seller = ""
+    for l in lines:
+        left = re.split(r"\s{2,}", l.strip())[0].strip()
+        if not left or "Credit Memo" in left or left.startswith("Marginal"):
+            continue
+        if any(left.startswith(lb) for lb in LABELS):
+            continue
+        if re.search(r"[A-Za-z]", left) and len(left) > 3:
+            seller = left
+            break
+    r["fournisseur"] = seller
+    r["pays"] = next((c for c in COUNTRIES[:-1] if c in head), None) or ("France" if "France" in head else "")
+
+    raw_date = _grab(r"Date\s+([\d]{1,2}[./][\d]{1,2}[./]\d{4})", txt)
+    r["date_avoir"] = raw_date or ""
+
+    NUM = "(\\d[\\d.,\u00a0\u202f ]*\\d|\\d)"
+    total = None
+    for m in re.finditer(r"(?<![A-Za-z])Total[:\s]+[€$]?\s*" + NUM, txt, re.IGNORECASE):
+        total = m.group(1)
+    r["montant"] = norm_amount(total) if total else 0.0
+    if not r["montant"]:
+        r["flags"].append("Montant non détecté")
+
+    motif = ""
+    seg = re.split(r"Sales Description", txt)
+    if len(seg) > 1:
+        for l in seg[1].splitlines():
+            left = re.split(r"\s{2,}", l.strip())[0].strip()
+            if (left and re.search(r"[A-Za-z]", left)
+                    and not left.startswith(("Quantity", "Unit", "Tax", "Subtotal", "Total", "Amount"))):
+                motif = left
+                break
+    r["motif"] = motif
+    r["notes"] = (f"Import avoir {fname}."
+                  + (" [" + " ; ".join(r["flags"]) + "]" if r["flags"] else ""))
+    return r
+
+
 def parse_asn(content_bytes, filename):
     text = content_bytes.decode("utf-8-sig", errors="replace")
     rows = list(csv.DictReader(io.StringIO(text)))
