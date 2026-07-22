@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Avoirs — Suivi{% endblock %}
+{% block body %}
+{% if msg %}<div class="msg">{{ msg }}</div>{% endif %}
+<div class="panel" style="padding:18px;margin-bottom:16px">
+  <h2 style="margin-top:0">Importer un / des avoir(s)</h2>
+  <p class="muted">Dépose un ou plusieurs PDF d'avoir (Credit Memo). Le n°, le fournisseur, la devise et le montant sont extraits automatiquement (les doublons sont ignorés).</p>
+  <form method="post" action="/import/avoir" enctype="multipart/form-data">
+    <div class="drop"><input type="file" name="files" accept="application/pdf" multiple required></div>
+    <button class="btn primary" style="margin-top:12px">Importer les avoirs</button>
+  </form>
+</div>
+<div class="panel">
+  <table>
+  <thead><tr><th>N° avoir</th><th>Fournisseur</th><th>Pays</th><th>Date</th><th>Montant</th><th>Utilisé</th><th>Solde</th><th>Statut</th><th>Réf. cmd d'origine</th></tr></thead>
+  <tbody>
+  {% for v in views %}
+  <tr onclick="location='/avoirs/{{ v.a.id }}'" style="cursor:pointer">
+    <td><b>{{ v.a.numero }}</b></td>
+    <td>{{ v.a.fournisseur }}</td>
+    <td>{{ v.a.pays }}</td>
+    <td>{{ v.a.date_avoir }}</td>
+    <td>{{ "%.2f"|format(v.a.montant) }} {{ v.a.devise }}</td>
+    <td>{{ "%.2f"|format(v.used) }} {{ v.a.devise }}</td>
+    <td><b>{{ "%.2f"|format(v.solde) }} {{ v.a.devise }}</b></td>
+    <td><span class="badge b-{{ v.cls }}">{{ v.statut }}</span></td>
+    <td>{{ ('#' ~ v.a.callisto_ref) if v.a.callisto_ref else '' }}</td>
+  </tr>
+  {% endfor %}
+  {% if not views %}<tr><td colspan="9" class="muted" style="text-align:center;padding:22px">Aucun avoir. Importe un PDF ci-dessus.</td></tr>{% endif %}
+  </tbody></table>
+</div>
+{% endblock %}
