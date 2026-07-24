@@ -11,8 +11,39 @@ ASN_ORDER = ["item_id", "product_name", "sku_requested", "sku_scanned", "imei", 
 
 
 def _pdftotext(path):
-    return subprocess.run(["pdftotext", "-layout", path, "-"],
-                          capture_output=True, text=True).stdout
+    txt = subprocess.run(["pdftotext", "-layout", path, "-"],
+                         capture_output=True, text=True).stdout
+    # Certains PDF (ex. "Microsoft: Print To PDF") tracent le texte en courbes
+    # vectorielles sans police intégrée : pdftotext ne renvoie alors rien.
+    # On bascule sur l'OCR (rendu image + tesseract) pour ces documents scannés.
+    if len(re.sub(r"\s", "", txt)) < 10:
+        ocr = _ocr_pdf(path)
+        if ocr:
+            return ocr
+    return txt
+
+
+def _ocr_pdf(path):
+    """OCR de secours pour les PDF sans couche texte (scans, print-to-PDF vectoriel).
+    Rend chaque page en PNG (pdftoppm) puis lit avec tesseract. Renvoie "" si
+    l'outillage OCR n'est pas disponible."""
+    import tempfile, glob
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            base = os.path.join(d, "pg")
+            subprocess.run(["pdftoppm", "-r", "200", "-png", path, base],
+                           capture_output=True, check=True)
+            out = []
+            for png in sorted(glob.glob(base + "*.png")):
+                r = subprocess.run(
+                    ["tesseract", png, "-", "--psm", "4",
+                     "-c", "preserve_interword_spaces=1"],
+                    capture_output=True, text=True)
+                if r.stdout:
+                    out.append(r.stdout)
+            return "\n".join(out)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return ""
 
 
 def norm_amount(s):
@@ -211,9 +242,14 @@ def parse_avoir(path, filename=None):
     seller = ""
     for l in lines:
         left = re.split(r"\s{2,}", l.strip())[0].strip()
+        # Retire un éventuel logo OCR en tête de ligne (© / marque isolée).
+        left = re.sub(r"^[©®™©®™]\s*", "", left).strip()
         if not left or "Credit Memo" in left or left.startswith("Marginal"):
             continue
         if any(left.startswith(lb) for lb in LABELS):
+            continue
+        # Ignore un logo OCRisé seul (un mot tout en majuscules, ex. "ALCHEMY").
+        if re.fullmatch(r"[A-Z][A-Z ]{2,}", left):
             continue
         if re.search(r"[A-Za-z]", left) and len(left) > 3:
             seller = left
